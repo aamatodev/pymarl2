@@ -13,9 +13,9 @@ import numpy as np
 from torch.distributions import Categorical
 from utils.th_utils import get_parameters_num
 
-from src.modules.sge.smacv2contrastivemodel import SMACV2GraphContrastiveModel
-from src.utils.graph_utils import generate_graph
-from src.utils.smac_utils import nodes_from_state_vector, state_features
+from modules.sge.smacv2contrastivemodel import SMACV2GraphContrastiveModel
+from utils.graph_utils import generate_graph
+from utils.smac_utils import state_features, build_graphs_from_state_batch
 
 
 class NQLearner:
@@ -66,24 +66,10 @@ class NQLearner:
         rewards = batch["reward"][:, :-1].to(self.device)
         states = batch["state"][:, :-1].reshape(-1, 130)
 
-        node_features = []
-        ally_masks = []
-        for t in range(states.shape[0]):
-            x_nodes, ally_mask = nodes_from_state_vector(torch.tensor(states[t]), state_features)
-            node_features.append(x_nodes)
-            ally_masks.append(ally_mask)
-
-        graphs_from_batch = generate_graph(batch_size=states.shape[0],
-                                           node_features=torch.stack(node_features).view(-1, 9),
-                                           edge_attr=None,
-                                           n_agents=10,
-                                           device=self.device,
-                                           use_radius=False)
-
-        graphs_from_batch["ally_mask"] = torch.stack(ally_masks).view(-1)
+        graphs = build_graphs_from_state_batch(states, state_features, device="cuda")
 
         with torch.no_grad():
-            embeddings, final_embeddings, current_state, goal_state = self.sge_model(graphs_from_batch)
+            embeddings, final_embeddings, current_state, goal_state = self.sge_model(graphs)
 
             similarity = torch.nn.functional.cosine_similarity(current_state, goal_state, dim=-1)
             similarity = (similarity + 1) / 2

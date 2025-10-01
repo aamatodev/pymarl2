@@ -117,34 +117,131 @@ def _build_unit(vec: torch.Tensor, fmap: Dict[str, int], side: str, i: int) -> t
     return torch.tensor(vals, dtype=torch.float32)  # [9]
 
 
-# ---- convert one state vector to a PyG graph (updated to 9-dim x) ----
-def nodes_from_state_vector(vec: torch.Tensor, feature_names: List[str]) -> Tuple[torch.Tensor, torch.Tensor]:
+UNIT_FEAT_DIM = 9  # [7 base + is_ally + is_alive]
+
+@torch.no_grad()
+def nodes_from_state_batch(
+    state_batch: torch.Tensor,              # [B, D_state]
+    feature_names: List[str],               # same list you already have
+    device: torch.device | str = "cpu",
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Build node features from ONE flat state vector (shape [D]) and names.
+    Vectorized node feature builder for a batch of state vectors.
 
     Returns:
-        x: [num_nodes, 9]  (allies first, then enemies)
-        ally_mask: [num_nodes]  (1 for ally, 0 for enemy)
+        x:         [B, N, 9]  allies (A) first then enemies (E), N=A+E
+        ally_mask: [N]        1 for allies, 0 for enemies (same for all in batch)
+                               (repeat it yourself if you prefer [B*N] flat later)
     """
-    assert vec.dim() == 1, f"expected 1D state vector, got {tuple(vec.shape)}"
+    if isinstance(device, str):
+        device = torch.device(device)
+    assert state_batch.ndim == 2, f"state_batch must be [B,D], got {tuple(state_batch.shape)}"
+    B, D = state_batch.shape
+    state_batch = state_batch.to(torch.float32).to(device)
+
     fmap = _index_map(feature_names)
+    ally_ids  = _collect_ids(feature_names, "ally")    # e.g., [0,1,2,3,4]
+    enemy_ids = _collect_ids(feature_names, "enemy")   # e.g., [0,1,2,3,4]
+    A = len(ally_ids)
+    E = len(enemy_ids)
+    N = A + E
 
-    ally_ids = _collect_ids(feature_names, "ally")
-    enemy_ids = _collect_ids(feature_names, "enemy")
+    # Helper: gather one attribute over a list of unit ids -> [B, U]
+    def gather(side: str, key_tmpl: str, ids: List[int]) -> torch.Tensor:
+        outs = []
+        for i in ids:
+            name = key_tmpl.format(i=i)
+            j = fmap.get(name, -1)
+            if j >= 0:
+                outs.append(state_batch[:, j])
+            else:
+                outs.append(torch.zeros(B, dtype=torch.float32, device=device))
+        return torch.stack(outs, dim=1) if ids else torch.zeros(B, 0, dtype=torch.float32, device=device)
 
-    nodes: List[torch.Tensor] = []
-    for i in ally_ids:
-        nodes.append(_build_unit(vec, fmap, "ally", i))
-    for j in enemy_ids:
-        nodes.append(_build_unit(vec, fmap, "enemy", j))
+    # Allies (A,U= A): build 7 base channels
+    a_h   = gather("ally",  "ally_health_{i}",        ally_ids)   # [B,A]
+    a_rx  = gather("ally",  "ally_relative_x_{i}",    ally_ids)
+    a_ry  = gather("ally",  "ally_relative_y_{i}",    ally_ids)
+    a_sh  = gather("ally",  "ally_shield_{i}",        ally_ids)
+    a_t0  = gather("ally",  "ally_unit_type_{i}_bit_0", ally_ids)
+    a_t1  = gather("ally",  "ally_unit_type_{i}_bit_1", ally_ids)
+    a_t2  = gather("ally",  "ally_unit_type_{i}_bit_2", ally_ids)
 
-    if len(nodes) == 0:
-        return torch.zeros((0, UNIT_FEAT_DIM), dtype=torch.float32), torch.zeros((0,), dtype=torch.float32)
+    # Enemies (E): 7 base channels
+    e_h   = gather("enemy", "enemy_health_{i}",        enemy_ids) # [B,E]
+    e_rx  = gather("enemy", "enemy_relative_x_{i}",    enemy_ids)
+    e_ry  = gather("enemy", "enemy_relative_y_{i}",    enemy_ids)
+    e_sh  = gather("enemy", "enemy_shield_{i}",        enemy_ids)
+    e_t0  = gather("enemy", "enemy_unit_type_{i}_bit_0", enemy_ids)
+    e_t1  = gather("enemy", "enemy_unit_type_{i}_bit_1", enemy_ids)
+    e_t2  = gather("enemy", "enemy_unit_type_{i}_bit_2", enemy_ids)
 
-    x = torch.stack(nodes, dim=0)  # [N, 9]
+    # Compose allies/enemies blocks: [B,A,7] and [B,E,7]
+    allies7 = torch.stack([a_h, a_rx, a_ry, a_sh, a_t0, a_t1, a_t2], dim=-1) if A > 0 else \
+              torch.zeros(B, 0, 7, dtype=torch.float32, device=device)
+    enemies7 = torch.stack([e_h, e_rx, e_ry, e_sh, e_t0, e_t1, e_t2], dim=-1) if E > 0 else \
+               torch.zeros(B, 0, 7, dtype=torch.float32, device=device)
+
+    # Flags
+    a_is_ally  = torch.ones(B, A, 1, dtype=torch.float32, device=device)
+    e_is_ally  = torch.zeros(B, E, 1, dtype=torch.float32, device=device)
+
+    a_is_alive = ((a_h + a_sh) > 0).float().unsqueeze(-1) if A > 0 else torch.zeros(B, 0, 1, device=device)
+    e_is_alive = ((e_h + e_sh) > 0).float().unsqueeze(-1) if E > 0 else torch.zeros(B, 0, 1, device=device)
+
+    allies9  = torch.cat([allies7,  a_is_ally, a_is_alive], dim=-1)  # [B,A,9]
+    enemies9 = torch.cat([enemies7, e_is_ally, e_is_alive], dim=-1)  # [B,E,9]
+
+    # Final [B, N, 9]
+    X = torch.cat([allies9, enemies9], dim=1)  # [B, N, 9]
+
+    # ally_mask for a single graph (same across batch)
     ally_mask = torch.cat([
-        torch.ones(len(ally_ids), dtype=torch.float32),
-        torch.zeros(len(enemy_ids), dtype=torch.float32)
+        torch.ones(A, dtype=torch.float32, device=device),
+        torch.zeros(E, dtype=torch.float32, device=device)
     ], dim=0)  # [N]
-    return x, ally_mask
 
+    return X, ally_mask
+
+
+@torch.no_grad()
+def build_graphs_from_state_batch(
+    state_batch: torch.Tensor,              # [B, D_state]
+    feature_names: List[str],
+    device: torch.device | str = "cpu",
+) -> Dict[str, torch.Tensor]:
+    """
+    PyG-compatible graphs for a whole batch of state vectors.
+    Returns a dict with:
+      x:         [B*N, 9]
+      edge_index:[2, B*E]  fully-connected per-graph
+      batch:     [B*N]     graph ids
+      ally_mask: [B*N]     1 for allies, 0 for enemies
+    """
+    if isinstance(device, str):
+        device = torch.device(device)
+
+    X, ally_mask_per_graph = nodes_from_state_batch(state_batch, feature_names, device=device)  # [B,N,9], [N]
+    B, N, _ = X.shape
+
+    # Flatten node features
+    x = X.reshape(B * N, UNIT_FEAT_DIM)  # [B*N, 9]
+
+    # ally_mask repeated for the batch
+    ally_mask = ally_mask_per_graph.repeat(B)  # [B*N]
+
+    # batch vector
+    batch_vec = torch.repeat_interleave(torch.arange(B, device=device, dtype=torch.long), repeats=N)  # [B*N]
+
+    # fully-connected edges per-graph with offsets
+    base_edge = _fc_edge_index(N).to(device)  # [2, N*(N-1)]
+    E = base_edge.size(1)
+    offs = (torch.arange(B, device=device) * N).view(1, -1, 1)     # [1,B,1]
+    edge_index = (base_edge.unsqueeze(1) + offs).reshape(2, B * E) # [2, B*E]
+
+    return {
+        "x": x,
+        "edge_index": edge_index,
+        "batch": batch_vec,
+        "ally_mask": ally_mask,
+    }
