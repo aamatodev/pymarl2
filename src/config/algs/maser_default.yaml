@@ -1,0 +1,47 @@
+# --- QMIX specific parameters ---
+# --- This config file uses the episodic runner, which is useful for testing locally ---
+
+# use epsilon greedy action selector
+action_selector: "epsilon_greedy"
+epsilon_start: 1.0
+epsilon_finish: 0.05
+epsilon_anneal_time: 50000
+
+runner: "parallel"
+mac: "basic_mac" # Basic controller
+batch_size_run: 4
+agent: "n_rnn" # Default agent
+wandb_project: "maser_gnn_ns_bench_update" # W&B project name
+use_cuda: True # Use gpu by default unless it isn't available
+buffer_cpu_only: False # If true we won't keep all of the replay buffer in vram
+
+
+# update the target network every {} episodes
+target_update_interval_or_tau: 200
+
+# --- RL hyperparameters ---
+gamma: 0.99
+batch_size: 32 # Number of episodes to train on
+buffer_size: 5000 # Size of the replay buffer
+lr: 0.0005 # Learning rate for agents
+optim_alpha: 0.99 # Adam alpha
+optim_eps: 0.00001 # Adam epsilon
+grad_norm_clip: 10 # Reduce magnitude of gradients above this L2 norm
+
+use_rnn: False
+hidden_dim: 256 # Size of hidden state for default rnn agent
+
+# use the Q_Learner to train
+agent_output_type: "q"
+learner: "maser_q_learner"
+double_q: True
+mixer: "qmix"
+mixing_embed_dim: 32
+lam: 0.03
+alpha: 0.5
+ind: 1
+mix: 1
+expl: 1
+dis: 1
+goal: "maser"
+name: "qmix"

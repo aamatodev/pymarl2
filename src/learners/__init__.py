@@ -1,5 +1,7 @@
 from .fake_gema_nq_learner import FakeGemaNQLearner
 from .gema_nq_learner import GEMANQLearner
+from .lagma_learner import LAGMALearner
+from .maser_q_learner import maserQLearner
 from .q_learner import QLearner
 from .coma_learner import COMALearner
 from .qtran_learner import QLearner as QTranLearner
@@ -27,3 +29,5 @@ REGISTRY["max_q_learner"] = MAXQLearner
 REGISTRY["dmaq_qatten_learner"] = DMAQ_qattenLearner
 REGISTRY["offpg_learner"] = OffPGLearner
 REGISTRY["fmac_learner"] = FMACLearner
+REGISTRY["lagma_learner"] = LAGMALearner
+REGISTRY["maser_q_learner"] = maserQLearner

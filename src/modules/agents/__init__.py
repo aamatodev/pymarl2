@@ -1,4 +1,5 @@
 from .gema_n_rnn_agent import GEMANRNNAgent
+from .lagma_agent import LAGMAAgent
 
 REGISTRY = {}
 
@@ -20,3 +21,4 @@ REGISTRY["ff"] = FFAgent
 REGISTRY["central_rnn"] = CentralRNNAgent
 REGISTRY["mlp"] = MLPAgent
 REGISTRY["att_rnn"] = ATTRNNAgent
+REGISTRY["lagma"] = LAGMAAgent

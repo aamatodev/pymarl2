@@ -17,6 +17,7 @@ from components.episode_buffer import ReplayBuffer
 from components.transforms import OneHot
 
 from smacv2.env import StarCraft2Env
+from modules.vae import REGISTRY as vae_REGISTRY
 
 def get_agent_own_state_size(env_args):
     sc_env = StarCraft2Env(**env_args)
@@ -77,9 +78,10 @@ def run(_run, _config, _log):
 
 
 def evaluate_sequential(args, runner):
-
+    batch = []
     for _ in range(args.test_nepisode):
         runner.run(test_mode=True)
+        batch.append(runner.batch.data.transition_data["state"])
 
     if args.save_replay:
         runner.save_replay()
@@ -126,9 +128,20 @@ def run_sequential(args, logger):
 
     # Give runner the scheme
     runner.setup(scheme=scheme, groups=groups, preprocess=preprocess, mac=mac)
+    # Setup VQVAE
+    state_dim = buffer.scheme["state"]["vshape"]
+    if hasattr(args, "use_vqvae"):
+        if args.use_vqvae:
+            vqvae = vae_REGISTRY[args.vae](state_dim, state_dim, args)
+            if args.use_cuda:
+                vqvae.cuda()
+        else:
+            vqvae = None
 
-    # Learner
-    learner = le_REGISTRY[args.learner](mac, buffer.scheme, logger, args)
+    if args.learner == "lagma_learner":
+        learner = le_REGISTRY[args.learner](mac, vqvae, buffer.scheme, logger, args)
+    else:
+        learner = le_REGISTRY[args.learner](mac, buffer.scheme, logger, args)
 
     if args.use_cuda:
         mac.cuda()
