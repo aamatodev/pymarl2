@@ -1,4 +1,5 @@
 from .fake_gema_nq_learner import FakeGemaNQLearner
+from .gema_nq_learner import GEMANQLearner
 from .q_learner import QLearner
 from .coma_learner import COMALearner
 from .qtran_learner import QLearner as QTranLearner
@@ -19,6 +20,7 @@ REGISTRY["qtran_learner"] = QTranLearner
 REGISTRY["ppo_learner"] = PPOLearner
 REGISTRY["lica_learner"] = LICALearner
 REGISTRY["nq_learner"] = NQLearner
+REGISTRY["gema_nq_learner"] = GEMANQLearner
 REGISTRY["fake_gema_nq_learner"] = FakeGemaNQLearner
 REGISTRY["policy_gradient_v2"] = PGLearner_v2
 REGISTRY["max_q_learner"] = MAXQLearner

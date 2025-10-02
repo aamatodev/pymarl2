@@ -1,3 +1,5 @@
+from .gema_n_rnn_agent import GEMANRNNAgent
+
 REGISTRY = {}
 
 from .rnn_agent import RNNAgent
@@ -11,6 +13,7 @@ from .atten_rnn_agent import ATTRNNAgent
 
 REGISTRY["rnn"] = RNNAgent
 REGISTRY["n_rnn"] = NRNNAgent
+REGISTRY["gema_n_rnn"] = GEMANRNNAgent
 REGISTRY["rnn_ppo"] = RNNPPOAgent
 REGISTRY["conv_agent"] = ConvAgent
 REGISTRY["ff"] = FFAgent

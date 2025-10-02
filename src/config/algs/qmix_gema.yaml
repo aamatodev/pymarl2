@@ -19,10 +19,10 @@ target_update_interval: 200
 
 # use the Q_Learner to train
 mac: "n_mac"
-agent: "n_rnn"
+agent: "gema_n_rnn"
 agent_output_type: q
 
-learner: "fake_gema_nq_learner"
+learner: "gema_nq_learner"
 mixer: "qmix"
 mixing_embed_dim: 32
 hypernet_embed: 64

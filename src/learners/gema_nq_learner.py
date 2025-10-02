@@ -18,7 +18,7 @@ from utils.graph_utils import generate_graph
 from utils.smac_utils import state_features, build_graphs_from_state_batch
 
 
-class NQLearner:
+class GEMANQLearner:
     def __init__(self, mac, scheme, logger, args):
         self.args = args
         self.mac = mac
@@ -55,10 +55,27 @@ class NQLearner:
         self.train_t = 0
 
         # th.autograd.set_detect_anomaly(True)
+        self.sge_model = SMACV2GraphContrastiveModel(device=self.device, d_node_in=9, enemy_feature_idx=[]).to(
+            self.device)
+        self.sge_model.load_state_dict(torch.load("/home/aamato/Documents/marl/pymarl2/src/modules/sge/model_epoch_23.pth", map_location=torch.device(self.device)))
+        self.sge_model.eval()
+
         
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
         # Get the relevant quantities
         rewards = batch["reward"][:, :-1].to(self.device)
+        states = batch["state"][:, :-1].reshape(-1, 130)
+
+        graphs = build_graphs_from_state_batch(states, state_features, device="cuda")
+
+        with torch.no_grad():
+            embeddings, final_embeddings, current_state, goal_state = self.sge_model(graphs)
+
+            similarity = torch.nn.functional.cosine_similarity(current_state, goal_state, dim=-1)
+            similarity = (similarity + 1) / 2
+
+        rewards = rewards + 0.1 * similarity.to(rewards.device).reshape(rewards.shape)
+
         actions = batch["actions"][:, :-1].to(self.device)
         terminated = batch["terminated"][:, :-1].float().to(self.device)
         mask = batch["filled"][:, :-1].float().to(self.device)

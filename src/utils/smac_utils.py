@@ -245,3 +245,165 @@ def build_graphs_from_state_batch(
         "batch": batch_vec,
         "ally_mask": ally_mask,
     }
+
+
+
+
+OBS_FEATURES = ['move_action_north', 'move_action_south', 'move_action_east', 'move_action_west', 'enemy_shootable_0',
+                'enemy_distance_0', 'enemy_relative_x_0', 'enemy_relative_y_0', 'enemy_health_0', 'enemy_shield_0',
+                'enemy_unit_type_0_bit_0', 'enemy_unit_type_0_bit_1', 'enemy_unit_type_0_bit_2', 'enemy_shootable_1',
+                'enemy_distance_1', 'enemy_relative_x_1', 'enemy_relative_y_1', 'enemy_health_1', 'enemy_shield_1',
+                'enemy_unit_type_1_bit_0', 'enemy_unit_type_1_bit_1', 'enemy_unit_type_1_bit_2', 'enemy_shootable_2',
+                'enemy_distance_2', 'enemy_relative_x_2', 'enemy_relative_y_2', 'enemy_health_2', 'enemy_shield_2',
+                'enemy_unit_type_2_bit_0', 'enemy_unit_type_2_bit_1', 'enemy_unit_type_2_bit_2', 'enemy_shootable_3',
+                'enemy_distance_3', 'enemy_relative_x_3', 'enemy_relative_y_3', 'enemy_health_3', 'enemy_shield_3',
+                'enemy_unit_type_3_bit_0', 'enemy_unit_type_3_bit_1', 'enemy_unit_type_3_bit_2', 'enemy_shootable_4',
+                'enemy_distance_4', 'enemy_relative_x_4', 'enemy_relative_y_4', 'enemy_health_4', 'enemy_shield_4',
+                'enemy_unit_type_4_bit_0', 'enemy_unit_type_4_bit_1', 'enemy_unit_type_4_bit_2', 'ally_visible_1',
+                'ally_distance_1', 'ally_relative_x_1', 'ally_relative_y_1', 'ally_health_1', 'ally_shield_1',
+                'ally_unit_type_1_bit_0', 'ally_unit_type_1_bit_1', 'ally_unit_type_1_bit_2', 'ally_visible_2',
+                'ally_distance_2', 'ally_relative_x_2', 'ally_relative_y_2', 'ally_health_2', 'ally_shield_2',
+                'ally_unit_type_2_bit_0', 'ally_unit_type_2_bit_1', 'ally_unit_type_2_bit_2', 'ally_visible_3',
+                'ally_distance_3', 'ally_relative_x_3', 'ally_relative_y_3', 'ally_health_3', 'ally_shield_3',
+                'ally_unit_type_3_bit_0', 'ally_unit_type_3_bit_1', 'ally_unit_type_3_bit_2', 'ally_visible_4',
+                'ally_distance_4', 'ally_relative_x_4', 'ally_relative_y_4', 'ally_health_4', 'ally_shield_4',
+                'ally_unit_type_4_bit_0', 'ally_unit_type_4_bit_1', 'ally_unit_type_4_bit_2', 'own_health',
+                'own_shield', 'own_pos_x', 'own_pos_y', 'own_unit_type_bit_0', 'own_unit_type_bit_1',
+                'own_unit_type_bit_2']
+
+UNIT_FEAT_DIM = 9
+MAX_ALLIES = 5  # self + 4 teammates
+MAX_ENEMIES = 5
+NODES_PER_GRAPH = MAX_ALLIES + MAX_ENEMIES  # 10
+
+
+def _fc_edge_index(n: int) -> torch.Tensor:
+    if n <= 1:
+        return torch.empty(2, 0, dtype=torch.long)
+    idx = torch.arange(n, dtype=torch.long)
+    src = idx.repeat_interleave(n - 1)
+    dst = torch.stack([torch.cat([idx[:i], idx[i + 1:]]) for i in range(n)], dim=0).reshape(-1)
+    return torch.stack([src, dst], dim=0)  # [2, n*(n-1)]
+
+
+def _name_index_map(names: List[str]) -> Dict[str, int]:
+    return {n: i for i, n in enumerate(names)}
+
+
+@torch.no_grad()
+def build_partial_graphs_from_obs_batch(
+        obs_batch: torch.Tensor,  # [B, D]
+        obs_feature_names: List[str] = OBS_FEATURES,
+        device: torch.device | str = "cpu",
+) -> Dict[str, torch.Tensor]:
+    """
+    Vectorized builder: one graph per *row* in `obs_batch`.
+    Output concatenates graphs for the batch (PyG-compatible dict).
+    """
+    if isinstance(device, str):
+        device = torch.device(device)
+
+    if obs_batch.ndim != 2:
+        raise ValueError(f"obs_batch must be 2D [B, D], got {tuple(obs_batch.shape)}")
+
+    B, D = obs_batch.shape
+    obs_batch = obs_batch.to(torch.float32).to(device)
+    fmap = _name_index_map(obs_feature_names)
+
+    def fetch(name: str) -> torch.Tensor:
+        """Return [B] tensor of the named feature (zeros if missing)."""
+        idx = fmap.get(name, None)
+        if idx is None:
+            return torch.zeros(B, dtype=torch.float32, device=device)
+        return obs_batch[:, idx]
+
+    # -------------------- Allies --------------------
+    # Self (node 0 of each graph)
+    own_h = fetch("own_health")
+    own_s = fetch("own_shield")
+    own_t0 = fetch("own_unit_type_bit_0")
+    own_t1 = fetch("own_unit_type_bit_1")
+    own_t2 = fetch("own_unit_type_bit_2")
+    self_alive = ((own_h + own_s) > 0).float()
+
+    self_node = torch.stack([
+        own_h, torch.zeros_like(own_h), torch.zeros_like(own_h),
+        own_s, own_t0, own_t1, own_t2,
+        torch.ones_like(own_h),  # is_ally=1
+        self_alive
+    ], dim=-1)  # [B, 9]
+
+    # Ally nodes 1..4
+    ally_nodes = []
+    for i in range(1, MAX_ALLIES):
+        vis = fetch(f"ally_visible_{i}") > 0.5
+        ah = fetch(f"ally_health_{i}")
+        as_ = fetch(f"ally_shield_{i}")
+        rx = fetch(f"ally_relative_x_{i}")
+        ry = fetch(f"ally_relative_y_{i}")
+        tb0 = fetch(f"ally_unit_type_{i}_bit_0")
+        tb1 = fetch(f"ally_unit_type_{i}_bit_1")
+        tb2 = fetch(f"ally_unit_type_{i}_bit_2")
+        alive = ((ah + as_) > 0).float()
+
+        # zero out when not visible
+        mask = vis.float().unsqueeze(-1)  # [B,1]
+        feat = torch.stack([ah, rx, ry, as_, tb0, tb1, tb2,
+                            torch.ones_like(ah), alive], dim=-1)  # [B,9]
+        zeros = torch.zeros_like(feat)
+        ally_nodes.append(mask * feat + (1 - mask) * zeros)
+
+    allies = torch.cat([self_node] + ally_nodes, dim=1)  # [B, 5*9]? careful, we stacked across last dim
+    # fix: we concatenated along dim=1 but shapes are [B,9]; we want [B,5,9]
+    allies = torch.stack([self_node] + ally_nodes, dim=1)  # [B, 5, 9]
+
+    # -------------------- Enemies 0..4 --------------------
+    enemy_nodes = []
+    for j in range(MAX_ENEMIES):
+        shootable = fetch(f"enemy_shootable_{j}") > 0.5
+        dist = fetch(f"enemy_distance_{j}")
+        eh = fetch(f"enemy_health_{j}")
+        es = fetch(f"enemy_shield_{j}")
+        rx = fetch(f"enemy_relative_x_{j}")
+        ry = fetch(f"enemy_relative_y_{j}")
+        tb0 = fetch(f"enemy_unit_type_{j}_bit_0")
+        tb1 = fetch(f"enemy_unit_type_{j}_bit_1")
+        tb2 = fetch(f"enemy_unit_type_{j}_bit_2")
+        alive = ((eh + es) > 0).float()
+        seen = (shootable | (dist > 0) | (alive > 0)).float().unsqueeze(-1)
+
+        feat = torch.stack([eh, rx, ry, es, tb0, tb1, tb2,
+                            torch.zeros_like(eh), alive], dim=-1)  # [B,9]
+        zeros = torch.zeros_like(feat)
+        enemy_nodes.append(seen * feat + (1 - seen) * zeros)
+
+    enemies = torch.stack(enemy_nodes, dim=1)  # [B, 5, 9]
+
+    # -------------------- Assemble X, masks, batch --------------------
+    X = torch.cat([allies, enemies], dim=1)  # [B, 10, 9]
+    x = X.reshape(B * NODES_PER_GRAPH, UNIT_FEAT_DIM)  # [B*10, 9]
+
+    ally_mask_per_graph = torch.cat([
+        torch.ones(MAX_ALLIES, device=device),
+        torch.zeros(MAX_ENEMIES, device=device)
+    ]).to(torch.float32)  # [10]
+    ally_mask = ally_mask_per_graph.repeat(B)  # [B*10]
+
+    # batch vector (graph ids for PyG)
+    batch_vec = torch.repeat_interleave(torch.arange(B, device=device, dtype=torch.long),
+                                        repeats=NODES_PER_GRAPH)  # [B*10]
+
+    # edge index for each graph (fully connected), offset per graph
+    base_edge = _fc_edge_index(NODES_PER_GRAPH).to(device)  # [2, 10*9]
+    E = base_edge.size(1)
+    # offsets
+    offs = (torch.arange(B, device=device) * NODES_PER_GRAPH).view(1, -1, 1)  # [1, B, 1]
+    edge_index = base_edge.unsqueeze(1) + offs  # [2, B, E]
+    edge_index = edge_index.reshape(2, B * E)  # [2, B*E]
+
+    return {
+        "x": x,  # [B*10, 9]
+        "edge_index": edge_index,  # [2, B*E]
+        "batch": batch_vec,  # [B*10]
+        "ally_mask": ally_mask,  # [B*10]
+    }

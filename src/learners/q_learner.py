@@ -1,4 +1,6 @@
 import copy
+
+import torch
 from components.episode_buffer import EpisodeBatch
 from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
@@ -7,6 +9,11 @@ from envs.one_step_matrix_game import print_matrix_status
 import torch as th
 from torch.optim import RMSprop, Adam
 import numpy as np
+
+from modules.sge.smacv2contrastivemodel import SMACV2GraphContrastiveModel
+from utils.graph_utils import generate_graph
+from utils.smac_utils import state_features
+
 
 class QLearner:
     def __init__(self, mac, scheme, logger, args):
@@ -42,9 +49,40 @@ class QLearner:
         
         self.train_t = 0
 
+        self.sge_model = SMACV2GraphContrastiveModel(device=self.device,
+                                                     enemy_feature_idx=list(range(4, 49)))
+        self.sge_model.load_state_dict(torch.load("src/modules/sge/model_final.pth", map_location=torch.device(self.device)))
+        self.sge_model.eval()
+
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
         # Get the relevant quantities
         rewards = batch["reward"][:, :-1]
+        states = batch["state"].view(-1, 130)
+
+        node_features = []
+        ally_masks = []
+        for t in range(states.shape[0]):
+            x_nodes, ally_mask = nodes_from_state_vector(torch.tensor(states[t]), state_features)
+            node_features.append(x_nodes)
+            ally_masks.append(ally_mask)
+
+        graphs_from_batch = generate_graph(batch_size=states.shape[0],
+                                           node_features=torch.stack(node_features).view(-1, 9),
+                                           edge_attr=None,
+                                           n_agents=10,
+                                           device=self.device,
+                                           use_radius=False)
+
+        graphs_from_batch["ally_mask"] = torch.stack(ally_masks).view(-1)
+
+        with torch.no_grad():
+            embeddings, final_embeddings, current_state, goal_state = self.sge_model(graphs_from_batch)
+
+            similarity = torch.nn.functional.cosine_similarity(embeddings, final_embeddings, dim=-1)
+            similarity = (similarity + 1) / 2
+
+        rewards = rewards + similarity.to(rewards.device).reshape(rewards.shape)
+
         actions = batch["actions"][:, :-1]
         terminated = batch["terminated"][:, :-1].float()
         mask = batch["filled"][:, :-1].float()
