@@ -41,11 +41,12 @@ class PPOLearner:
         mask_agent = mask.unsqueeze(2).repeat(1, 1, self.n_agents, 1)
         
         # targets and advantages
-        values = self.critic(batch)
-        advantages, targets = build_gae_targets(
-            rewards, mask, values, self.args.gamma, self.args.gae_lambda)
-        
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        with th.no_grad():
+            values = self.critic(batch)
+            advantages, targets = build_gae_targets(
+                rewards, mask, values, self.args.gamma, self.args.gae_lambda)
+
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         advantages = advantages.unsqueeze(2).repeat(1, 1, self.n_agents, 1)
         
         for _ in range(self.args.mini_epochs):

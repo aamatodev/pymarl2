@@ -1,0 +1,17 @@
+{"time":"2025-09-30T15:22:45.429006223-05:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-09-30T15:22:45.634132637-05:00","level":"INFO","msg":"stream: created new stream","id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:45.634222023-05:00","level":"INFO","msg":"stream: started","id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:45.634248164-05:00","level":"INFO","msg":"handler: started","stream_id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:45.634262448-05:00","level":"INFO","msg":"writer: Do: started","stream_id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:45.634293434-05:00","level":"INFO","msg":"sender: started","stream_id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:45.687558809-05:00","level":"ERROR","msg":"HTTP error","status":403,"method":"POST","url":"https://api.wandb.ai/graphql"}
+{"time":"2025-09-30T15:22:45.687631132-05:00","level":"ERROR","msg":"runupserter: failed to init run","error":"returned error 403: {\"data\":{\"upsertBucket\":null},\"errors\":[{\"message\":\"permission denied\",\"path\":[\"upsertBucket\"],\"extensions\":{\"code\":\"PERMISSION_ERROR\"}}]}"}
+{"time":"2025-09-30T15:22:48.691611883-05:00","level":"INFO","msg":"stream: closing","id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:48.69947429-05:00","level":"ERROR","msg":"sender: uploadConfigFile: stream: no run"}
+{"time":"2025-09-30T15:22:48.79824423-05:00","level":"ERROR","msg":"HTTP error","status":404,"method":"POST","url":"https://api.wandb.ai/graphql"}
+{"time":"2025-09-30T15:22:48.798298597-05:00","level":"ERROR","msg":"runfiles: CreateRunFiles returned error: returned error 404: {\"data\":{\"createRunFiles\":null},\"errors\":[{\"message\":\"run smac_v2_runs/usvk3vt4 not found during createRunFiles\",\"path\":[\"createRunFiles\"]}]}"}
+{"time":"2025-09-30T15:22:48.799621715-05:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-09-30T15:22:48.799649329-05:00","level":"INFO","msg":"handler: closed","stream_id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:48.799654704-05:00","level":"INFO","msg":"writer: Close: closed","stream_id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:48.799683541-05:00","level":"INFO","msg":"sender: closed","stream_id":"usvk3vt4"}
+{"time":"2025-09-30T15:22:48.799687437-05:00","level":"INFO","msg":"stream: closed","id":"usvk3vt4"}

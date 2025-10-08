@@ -102,17 +102,26 @@ def run_sequential(args, logger):
 
     if getattr(args, 'agent_own_state_size', False):
         args.agent_own_state_size = get_agent_own_state_size(args.env_args)
-
+    framestack_num = args.env_args.get("framestack_num", 1)
     # Default/Base scheme
     scheme = {
-        "state": {"vshape": env_info["state_shape"]},
-        "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
+        "hidden": {
+            "vshape": (args.rnn_hidden_dim,) * framestack_num,
+            "group": "agents",
+        },
+        "state": {"vshape": env_info["state_shape"] * framestack_num},
+        "obs": {"vshape": env_info["obs_shape"] * framestack_num, "group": "agents"},
         "actions": {"vshape": (1,), "group": "agents", "dtype": th.long},
-        "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
-        "probs": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.float},
+        "avail_actions": {
+            "vshape": (env_info["n_actions"],),
+            "group": "agents",
+            "dtype": th.int,
+        },
         "reward": {"vshape": (1,)},
         "terminated": {"vshape": (1,), "dtype": th.uint8},
+        "timed_out": {"vshape": (1,), "dtype": th.uint8},
     }
+
     groups = {
         "agents": args.n_agents
     }

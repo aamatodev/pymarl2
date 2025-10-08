@@ -18,7 +18,7 @@ class maserQLearner:
 
         self.logger = logger
         self.n_agents = args.n_agents
-        self.device = "cpu"
+        self.device = args.device
         self.params = list(mac.parameters())
 
         self.last_target_update_episode = 0
@@ -52,7 +52,7 @@ class maserQLearner:
         # self.distance = nn.Linear(self.mac.scheme1['obs']['vshape'], args.n_actions).to(device=self.device)
 
         self.distance = nn.Sequential(
-            nn.Linear(self.mac._get_input_shape(scheme), 128),
+            nn.Linear(92, 128),
             nn.ReLU(),
             nn.Linear(128, args.n_actions)
         ).to(device=self.device)

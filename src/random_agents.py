@@ -17,7 +17,9 @@ Notes
 import argparse
 import json
 import os
+import sys
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
@@ -62,23 +64,24 @@ def rollout_and_collect(args) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
     # Get PyMARL2 config object (expects defaults present in src/config/...)
     # We mimic `python run.py --config=qmix --env-config=smacv2 ...`
     # Here we assume trained checkpoint is QMIX and env is smacv2.
-    pymarl_cfg = _get_config()  # returns a dict with defaults; we will patch
+    params = deepcopy(sys.argv)
+    pymarl_cfg = _get_config(params, "--env-config", "envs")
     cfg = convert(pymarl_cfg)   # dict -> nested namedtuples (PyMARL2 convention)
 
     # Patch key runtime bits from CLI
     # Important minimal fields:
     #   cfg.env, cfg.env_args, cfg.agent, cfg.mac, cfg.runner, cfg.t_max
     # Most are already in defaults; we override what we need.
-    cfg.env = "smacv2"
-    cfg.env_args = dict(getattr(cfg, "env_args", {}))
-    cfg.env_args["map_name"] = args.map_name
-    cfg.test_nepisode = args.n_episodes
-    cfg.t_max = getattr(cfg, "t_max", 1000000)
+    # cfg.env = "smacv2"
+    # cfg.env_args = dict(getattr(cfg, "env_args", {}))
+    # cfg.env_args["map_name"] = args.map_name
+    # cfg.test_nepisode = args.n_episodes
+    # cfg.t_max = getattr(cfg, "t_max", 1000000)
 
     # Disable exploration while generating dataset
-    cfg.test_greedy = True
-    cfg.evaluation = True
-    cfg.batch_size_run = 1  # one episode at a time for dataset clarity
+    # cfg.test_greedy = True
+    # cfg.evaluation = True
+    # cfg.batch_size_run = 1  # one episode at a time for dataset clarity
 
     # ---------------------------
     # 2) Make environment
@@ -266,26 +269,26 @@ def rollout_and_collect(args) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Path to PyMARL2 QMIX checkpoint (torch .pt/.tar with 'agent' and 'mixer').")
-    parser.add_argument("--map_name", type=str, required=True,
-                        help="SMACv2 map name (e.g., MMM2, 3m, 8m_vs_9m, etc.).")
-    parser.add_argument("--config_name", type=str, default="qmix",
-                        help="(Optional) PyMARL2 base config name; we mainly use it to seed defaults.")
-    parser.add_argument("--n_episodes", type=int, default=50)
-    parser.add_argument("--seed", type=int, default=123)
-    parser.add_argument("--out", type=str, default="dataset_out",
-                        help="Output prefix (folder or basename). We'll create <out>.npz and <out>.json.")
-    parser.add_argument("--save_q", type=lambda x: str(x).lower() in {"1","true","yes","y"}, default=False,
-                        help="If True, stores per-step Q-values [T, n_agents, n_actions].")
-    args = parser.parse_args()
+    # parser.add_argument("--checkpoint", type=str, required=True,
+    #                     help="Path to PyMARL2 QMIX checkpoint (torch .pt/.tar with 'agent' and 'mixer').")
+    # parser.add_argument("--map_name", type=str, required=False,
+    #                     help="SMACv2 map name (e.g., MMM2, 3m, 8m_vs_9m, etc.).")
+    # parser.add_argument("--config_name", type=str, default="qmix",
+    #                     help="(Optional) PyMARL2 base config name; we mainly use it to seed defaults.")
+    # parser.add_argument("--n_episodes", type=int, default=50)
+    # parser.add_argument("--seed", type=int, default=123)
+    # parser.add_argument("--out", type=str, default="dataset_out",
+    #                     help="Output prefix (folder or basename). We'll create <out>.npz and <out>.json.")
+    # parser.add_argument("--save_q", type=lambda x: str(x).lower() in {"1","true","yes","y"}, default=False,
+    #                     help="If True, stores per-step Q-values [T, n_agents, n_actions].")
+    # args = parser.parse_args()
 
-    out_base = Path(args.out)
-    out_npz = out_base.with_suffix(".npz")
-    out_json = out_base.with_suffix(".json")
-    out_base.parent.mkdir(parents=True, exist_ok=True)
+    # out_base = Path(args.out)
+    # out_npz = out_base.with_suffix(".npz")
+    # out_json = out_base.with_suffix(".json")
+    # out_base.parent.mkdir(parents=True, exist_ok=True)
 
-    dataset, manifest = rollout_and_collect(args)
+    dataset, manifest = rollout_and_collect({})
 
     # Save NPZ
     np.savez_compressed(out_npz, **dataset)

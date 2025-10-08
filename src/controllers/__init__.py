@@ -1,3 +1,4 @@
+from .basic_controller_mappo import BasicMACMAPPO
 from .lagma_controller import LAGMAMAC
 
 REGISTRY = {}
@@ -11,6 +12,7 @@ from .lica_controller import LICAMAC
 from .dop_controller import DOPMAC
 
 REGISTRY["basic_mac"] = BasicMAC
+REGISTRY["basic_mac_mappo"] = BasicMACMAPPO
 REGISTRY["n_mac"] = NMAC
 REGISTRY["ppo_mac"] = PPOMAC
 REGISTRY["conv_mac"] = ConvMAC

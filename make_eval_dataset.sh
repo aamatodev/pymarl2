@@ -57,9 +57,9 @@ python src/main.py \
   checkpoint_path="$CKPT" \
   buffer_size="$EPISODES" \
   test_nepisode="$EPISODES" \
-  save_eval_buffer=True \
-  save_eval_buffer_path="$OUT_DIR" \
+#  save_eval_buffer=True \
+#  save_eval_buffer_path="$OUT_DIR" \
   saving_eval_seed="$SEED" \
   saving_eval_type="$SPLIT" \
-  env_args.capability_config.n_units="$N_UNITS" \
-  env_args.capability_config.start_positions.n_enemies="$N_ENEMIES"
+  env_args.capability_config.n_units="5" \
+  env_args.capability_config.n_enemies="$N_ENEMIES"

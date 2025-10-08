@@ -1,3 +1,4 @@
+import torch
 from envs import REGISTRY as env_REGISTRY
 from functools import partial
 from components.episode_buffer import EpisodeBatch
@@ -26,6 +27,10 @@ class EpisodeRunner:
         # Log the first run
         self.log_train_stats_t = -1000000
 
+
+        # sge_dataset
+        self.state_dataset = []
+
     def setup(self, scheme, groups, preprocess, mac):
         self.new_batch = partial(EpisodeBatch, scheme, groups, self.batch_size, self.episode_limit + 1,
                                  preprocess=preprocess, device=self.args.device)
@@ -39,6 +44,7 @@ class EpisodeRunner:
 
     def close_env(self):
         self.env.close()
+        torch.save(torch.stack(self.state_dataset), f"/home/aamato/Documents/marl/pymarl2/sge_datasets/sge_state_dataset.pt")
 
     def reset(self):
         self.batch = self.new_batch()
@@ -59,7 +65,7 @@ class EpisodeRunner:
                 "avail_actions": [self.env.get_avail_actions()],
                 "obs": [self.env.get_obs()]
             }
-
+            self.state_dataset.append(torch.from_numpy(pre_transition_data["state"][0]))
             self.batch.update(pre_transition_data, ts=self.t)
 
             # Pass the entire batch of experiences up till now to the agents
@@ -86,6 +92,7 @@ class EpisodeRunner:
             "avail_actions": [self.env.get_avail_actions()],
             "obs": [self.env.get_obs()]
         }
+        self.state_dataset.append(torch.from_numpy(last_data["state"][0]))
         self.batch.update(last_data, ts=self.t)
 
         # Select actions in the last stored state

@@ -1,3 +1,4 @@
+from .centralized_ppo_learner import CentralPPOLearner
 from .fake_gema_nq_learner import FakeGemaNQLearner
 from .gema_nq_learner import GEMANQLearner
 from .lagma_learner import LAGMALearner
@@ -13,6 +14,7 @@ from .max_q_learner import MAXQLearner
 from .dmaq_qatten_learner import DMAQ_qattenLearner
 from .offpg_learner import OffPGLearner
 from .fmac_learner import FMACLearner
+from .trust_region_learner import TrustRegionLearner
 
 REGISTRY = {}
 
@@ -31,3 +33,5 @@ REGISTRY["offpg_learner"] = OffPGLearner
 REGISTRY["fmac_learner"] = FMACLearner
 REGISTRY["lagma_learner"] = LAGMALearner
 REGISTRY["maser_q_learner"] = maserQLearner
+REGISTRY["trust_region_learner"] = TrustRegionLearner
+REGISTRY["central_ppo_learner"] = CentralPPOLearner

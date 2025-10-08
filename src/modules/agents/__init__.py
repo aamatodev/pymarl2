@@ -1,5 +1,6 @@
 from .gema_n_rnn_agent import GEMANRNNAgent
 from .lagma_agent import LAGMAAgent
+from .rnn_agent_mappo import RNNAgentMappo
 
 REGISTRY = {}
 
@@ -13,6 +14,7 @@ from .mlp_agent import MLPAgent
 from .atten_rnn_agent import ATTRNNAgent
 
 REGISTRY["rnn"] = RNNAgent
+REGISTRY["rnn_mappo"] = RNNAgentMappo
 REGISTRY["n_rnn"] = NRNNAgent
 REGISTRY["gema_n_rnn"] = GEMANRNNAgent
 REGISTRY["rnn_ppo"] = RNNPPOAgent
